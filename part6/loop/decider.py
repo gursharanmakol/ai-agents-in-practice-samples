@@ -1,9 +1,11 @@
 """Deciders: how the loop chooses the next action.
 
-THIS IS AN AGENT LOOP, NOT A WORKFLOW. The next action is chosen at RUNTIME
-from the current STATE -- never from a step counter. There is deliberately no
-``if step == 1 ... elif step == 2`` anywhere here. ``step_count`` exists only
-for the budget stop, never for choosing what to do next.
+The next action is chosen at RUNTIME from the current STATE -- never from a
+step counter. Terminology note (Part 5): because DeterministicDecider is code
+choosing the action, code owns the control policy, so v1 is workflow-shaped.
+LLMDeciderStub marks the seam where that choice becomes agentic. There is
+deliberately no ``if step == 1 ... elif step == 2`` anywhere here. ``step_count``
+exists only for the budget stop, never for choosing what to do next.
 """
 
 from __future__ import annotations
@@ -26,8 +28,9 @@ class BaseDecider(ABC):
 class DeterministicDecider(BaseDecider):
     """Branches purely on confirmed state fields -- no API keys, stable traces.
 
-    This is the "agent shape" without an LLM: observe state, choose the next
-    action from that state, and let the loop act, verify, and update.
+    This preserves the loop shape without an LLM: observe state, choose the
+    next action from that state, and let the loop act, verify, and update.
+    Code makes the choice, so this controller is workflow-shaped (Part 5).
     """
 
     def decide_next_action(self, state, tools, skill) -> str:

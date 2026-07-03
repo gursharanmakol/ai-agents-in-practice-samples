@@ -3,12 +3,14 @@
 ``verify_action_landed`` re-reads the world (with real exponential backoff
 between attempts) until it observes the expected state or runs out of retries.
 
-The single most important property: the READ path is INDEPENDENT of the WRITE
-path. We pass a ``read`` callable that re-queries the world (e.g.
-``get_order_status``); we never inspect the return value of the write that we
-are trying to confirm (e.g. ``cancel_order``'s ``accepted`` ack). An ack means
-"request received", not "world changed" -- only an independent read can confirm
-the latter.
+The single most important property: the read path is separate from the write
+acknowledgement, and it targets the AUTHORITATIVE store. We pass a ``read``
+callable that re-queries the business state (e.g. ``get_order_status``); we
+never inspect the return value of the write we are trying to confirm (e.g.
+``cancel_order``'s ``accepted`` ack). An ack means "request received", not
+"world changed" -- only an authoritative re-read can confirm the latter. (In
+this lab the in-memory store IS the authoritative source; in a real system, a
+second endpoint backed by the same stale cache would not count.)
 """
 
 from __future__ import annotations

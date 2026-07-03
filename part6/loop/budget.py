@@ -4,7 +4,10 @@ A real agent must always be able to stop. This module enforces three limits:
 
 - a step cap (don't loop forever),
 - a simple accumulated cost budget, and
-- a silence/timeout guard that treats a never-returning step as a failure.
+- a silence/timeout guard, modeled deterministically: it flags a step whose
+  recorded latency exceeded the guard. A real integration must enforce
+  wall-clock deadlines around external calls; this lab cannot preempt a
+  function that never returns.
 
 Whichever trips first ends the loop cleanly with a recorded ``stop_reason``.
 """

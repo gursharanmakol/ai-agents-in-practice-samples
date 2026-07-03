@@ -1,18 +1,21 @@
 # Part 6 — Building the Production Agent Loop
 
-A deterministic, runnable agent-loop lab for TechNova's "cancel an order, then refund what's
+A deterministic, runnable production-loop lab for TechNova's "cancel an order, then refund what's
 owed" flow. It demonstrates one core principle: **a tool response describes the REQUEST, not
 the WORLD.** An `accepted` acknowledgement from `cancel_order` is not proof the order is
-cancelled. For irreversible actions (like issuing a refund), the agent must **verify the world
+cancelled. For irreversible actions (like issuing a refund), the system must **verify the world
 changed before committing** to the next consequential action.
 
-## Agent-shaped, not a workflow
+## Workflow-shaped controller with an agentic seam
 
-The default lab uses a deterministic decision function so it runs without API keys and
-produces stable traces. It is still agent-shaped: each turn observes state, chooses the
-next action from the current state — never from a step counter — acts through one allowed
-tool, checks the result, updates state, and repeats. A real LLM decider can replace this
-function later without changing the tools, state, contracts, verification gate, or trace.
+The default lab uses a deterministic decision function so it runs without API
+keys and produces stable traces. Each turn observes state, chooses the next
+action from the current state (never from a step counter), acts through one
+allowed tool, checks the result, updates state, and repeats. Under Part 5's
+definition, this v1 controller is workflow-shaped: code owns the next-action
+choice. A real LLM decider can replace this function later, making the choice
+genuinely agentic, without changing the tools, state, contracts, verification
+gate, or trace.
 
 ## Why the default decider is deterministic
 
@@ -32,11 +35,14 @@ verification gate, idempotency, budgets, stop rules, and the trace would not cha
 why the default decider is deterministic: it runs with no API key, produces stable and
 reviewable traces, and keeps the focus on the structure rather than on a model's output.
 
-This still meets the definition of an agent from Part 5: the next step is chosen at runtime
-from the current state — not fixed at design time. A hardcoded `cancel → verify → refund`
-path would be a workflow. This loop observes state each turn and chooses the next action from
-that state, which is the agent shape. Swap a model in behind the same seam and nothing about
-that shape changes.
+One definition note, to stay consistent with Part 5: v1 is not an agent. The
+next action is chosen at runtime, but it is chosen by code, and code owning the
+control policy is what makes a system workflow-shaped. That is deliberate. A
+hardcoded `cancel → verify → refund` sequence would hide the structure this lab
+exists to show; a state-driven controller keeps the loop's real shape (observe
+state, choose, act, verify, repeat) while staying deterministic. Swap a model
+in behind the same seam and the choice becomes agentic; nothing else about the
+loop changes.
 
 So the lab is not demonstrating model intelligence. It is demonstrating the control structure
 a production agent needs around the model — the part that is hard to get right and easy to
@@ -86,7 +92,7 @@ Every step record keeps `tool_response` and `verification_read` as **separate fi
 when they agree. That gap is the whole lesson:
 
 - `tool_response` is what the tool *said* (e.g. `cancel_order` -> `{"status": "accepted"}`).
-- `verification_read` is what an **independent re-read** of the world *confirmed*
+- `verification_read` is what an **authoritative re-read** of the business state *confirmed*
   (e.g. `get_order_status` -> `"cancelled"`, or still `"pending"`).
 
 Compare the two runs:
@@ -96,15 +102,15 @@ Compare the two runs:
   and the refund is itself verified before the loop finishes.
 - **`naive_trace.json`** — the verification gate is removed, so the loop trusts the `accepted`
   acknowledgement and issues the refund immediately. Look at the `issue_refund` step: the
-  agent believes the order is `cancelled`, but `world_order_status` in `resulting_state` is
+  loop state treats the order as `cancelled`, but `world_order_status` in `resulting_state` is
   still `pending`. The refund went out before the world was confirmed — the exact bug this
   lab warns about.
 
 ## What this is NOT
 
 This is **not** a framework or a platform. There is no MCP, no RAG, no real LLM, no real
-payments, and no multi-agent orchestration. It is one bounded agent loop with two fake,
-in-memory tools. MCP and a real LLM decider are possible later additions *around the same
+payments, and no multi-agent orchestration. It is one bounded production-loop scaffold with
+a deterministic controller and two fake, in-memory tools. MCP and a real LLM decider are possible later additions *around the same
 tools and loop* — the loop, state, contracts, verification gate, and trace would not change.
 
 TechNova is a fictional company. All orders, refunds, and policies here are made up for
@@ -112,11 +118,21 @@ teaching.
 
 ## Roadmap
 
-This is v1 — the deterministic production loop. A later version swaps in a real LLM decider
+This is v1 — the deterministic, workflow-shaped production scaffold. A later version swaps in a real LLM decider
 behind the same seam (`decide_next_action`), and the surrounding structure — state, tools,
 contracts, verification, idempotency, budgets, stop rules, and trace — stays the same. That
 stability is the point: the model is the part that changes, the production structure is not.
 
+Planned for v1.1, to match the article's prescriptions exactly:
+- backend-side revalidation of the cancellation precondition inside the refund
+  store (the article's final enforcement boundary), with the naive example
+  moved to an explicitly labeled unsafe store
+- budget preflight: check the ceiling before an action runs instead of charging
+  afterward
+- `when_to_use` and `description` fields on every tool contract
+- lightweight runtime validation of tool responses before they enter working
+  state
+
 ## Read the article
 
-(link added after publish) — {PART_6_ARTICLE_URL}
+[AI Agents in Practice — Part 6: Building the Production Agent Loop](https://dev.to/gursharansingh/ai-agents-in-practice-part-6-building-the-production-agent-loop-2lfi)
