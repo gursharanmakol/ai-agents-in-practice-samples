@@ -46,6 +46,16 @@ def validate_tool_response(tool_name: str, response, contracts=None) -> dict:
         raise ToolResponseInvalid(
             f"{tool_name}: unrecognized status {response['status']!r} (allowed: {sorted(allowed)})"
         )
+    if tool_name in ("cancel_order", "issue_refund") and response["status"] == "accepted":
+        if "idempotent_replay" not in response:
+            raise ToolResponseInvalid(
+                f"{tool_name}: accepted response missing required field 'idempotent_replay'"
+            )
+    if response["status"] == "rejected":
+        if "reason" not in response or not isinstance(response.get("reason"), str):
+            raise ToolResponseInvalid(
+                f"{tool_name}: rejected response requires a string 'reason'"
+            )
     if "idempotent_replay" in response and not isinstance(response["idempotent_replay"], bool):
         raise ToolResponseInvalid(f"{tool_name}: idempotent_replay must be bool")
     return response

@@ -40,3 +40,30 @@ def test_unrecognized_status_is_rejected():
         assert "unrecognized status" in str(err)
     else:
         raise AssertionError("unknown status passed validation")
+
+
+def test_accepted_cancel_missing_replay_flag_is_rejected():
+    try:
+        validate_tool_response("cancel_order", {"order_id": "TN-1", "status": "accepted"})
+    except ToolResponseInvalid as err:
+        assert "idempotent_replay" in str(err)
+    else:
+        raise AssertionError("accepted response missing replay flag passed validation")
+
+
+def test_accepted_refund_missing_replay_flag_is_rejected():
+    try:
+        validate_tool_response("issue_refund", {"order_id": "TN-1", "status": "accepted"})
+    except ToolResponseInvalid as err:
+        assert "idempotent_replay" in str(err)
+    else:
+        raise AssertionError("accepted response missing replay flag passed validation")
+
+
+def test_rejected_refund_missing_reason_is_rejected():
+    try:
+        validate_tool_response("issue_refund", {"order_id": "TN-1", "status": "rejected"})
+    except ToolResponseInvalid as err:
+        assert "reason" in str(err)
+    else:
+        raise AssertionError("rejected response missing reason passed validation")

@@ -30,7 +30,10 @@ def test_repeated_cancel_with_same_key_does_not_double_apply():
 
 
 def test_repeated_refund_with_same_key_does_not_double_pay():
-    store = RefundStore(ORDER_ID, settle_after_reads=1)
+    order = OrderStore(ORDER_ID, settle_after_reads=0)
+    order.cancel_order(ORDER_ID, f"cancel_order:{ORDER_ID}")
+    store = RefundStore(ORDER_ID, settle_after_reads=1,
+                        order_reader=lambda: order.peek_order_status(ORDER_ID))
     key = f"issue_refund:{ORDER_ID}"
 
     first = store.issue_refund(ORDER_ID, key)

@@ -12,7 +12,9 @@ The verification gate is the difference between the safe and naive runs:
   authoritative re-read (``wait_and_recheck`` / ``get_refund_status``).
 - ``verify_enabled=False`` (naive): the ack is trusted as if it were the world,
   so status jumps straight to ``cancelled`` / ``completed`` and the refund can
-  go out before the world is confirmed. Same loop, same tools -- gate removed.
+  go out before the world is confirmed. Same loop -- gate removed. (The naive
+  EXAMPLE additionally swaps in the teaching-only UnsafeRefundStore so the
+  premature refund actually pays out; see examples/run_naive.py.)
 """
 
 from __future__ import annotations

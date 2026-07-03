@@ -49,7 +49,7 @@ def main() -> None:
         order_id=ORDER_ID,
         skill=load_skill(),
         scenario="naive_no_verification",
-        verify_enabled=False,  # the only difference from run_safe.py
+        verify_enabled=False,  # verification gate off (store swap above is the other difference)
         budget=Budget(max_steps=12),
         retries=1,
         backoff=0.0,

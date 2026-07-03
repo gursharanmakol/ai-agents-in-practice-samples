@@ -78,6 +78,7 @@ CONTRACTS: dict[str, ToolContract] = {
         failure_modes=[
             "accepted-but-not-settled (status still pending)",
             "rejected: order_not_cancelled (precondition enforced by the store)",
+            "rejected: authoritative_order_reader_unavailable (store not wired to an order source)",
             "double refund if called without a key",
         ],
         idempotency="key required (state-mutating)",

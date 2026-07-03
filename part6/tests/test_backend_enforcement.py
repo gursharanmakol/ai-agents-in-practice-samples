@@ -72,6 +72,14 @@ def test_unsafe_store_pays_out_despite_pending_world():
     assert refund.refund_effect_count == 1
 
 
+def test_unwired_store_fails_closed():
+    refund = RefundStore(ORDER_ID, settle_after_reads=1)  # no reader
+    resp = refund.issue_refund(ORDER_ID, f"issue_refund:{ORDER_ID}")
+    assert resp["status"] == "rejected"
+    assert resp["reason"] == "authoritative_order_reader_unavailable"
+    assert refund.refund_effect_count == 0
+
+
 def test_naive_loop_with_default_store_is_stopped_by_backend():
     """Gate OFF and default store: the backend still refuses to move money."""
     tools = Tools(

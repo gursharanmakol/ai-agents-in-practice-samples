@@ -114,7 +114,9 @@ The loop's verification gate prevents bad sequencing. The refund store enforces 
 rule. The default `RefundStore` is wired (by the `Tools` container) to an authoritative order
 reader and revalidates the cancellation precondition at execution time: if the order is not
 `cancelled`, the refund is **rejected** with `order_not_cancelled`, no money moves, and the
-idempotency key is not consumed, so a retry is allowed once the world settles. Run the naive
+idempotency key is not consumed, so a retry is allowed once the world settles. An unwired
+production store fails closed: without an authoritative reader it rejects every refund with
+`authoritative_order_reader_unavailable`. Run the naive
 loop against the default store and the backend stops it — `refund_rejected_by_backend` — even
 with the verification gate switched off. See `tests/test_backend_enforcement.py`.
 

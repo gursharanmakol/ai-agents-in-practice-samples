@@ -40,6 +40,8 @@ class RefundStore:
                 status (e.g. a non-consuming ``peek_order_status``). When set,
                 ``issue_refund`` revalidates the cancellation precondition at
                 execution time; the store is the final enforcement boundary.
+                Without a reader, the production store fails closed and rejects
+                every refund.
             settle_after_reads: How many *consuming* ``get_refund_status`` reads
                 must happen AFTER the refund is accepted before the status leaves
                 ``"pending"`` and becomes ``"completed"``. ``None`` means it
@@ -80,7 +82,13 @@ class RefundStore:
         loop's belief. Returns a rejection response, or None when permitted.
         """
         if self.order_reader is None:
-            return None  # not wired to an order source; nothing to check
+            # FAIL CLOSED: a production-shaped store with no authoritative
+            # source must refuse to move money, not silently skip the check.
+            return {
+                "order_id": order_id,
+                "status": "rejected",
+                "reason": "authoritative_order_reader_unavailable",
+            }
         world = self.order_reader()["status"]
         if world != "cancelled":
             return {"order_id": order_id, "status": "rejected", "reason": "order_not_cancelled"}
