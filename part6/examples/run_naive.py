@@ -1,13 +1,17 @@
 """Run the NAIVE agent loop and write traces/naive_trace.json.
 
-This is the SAME loop, tools, and store as the safe run -- with the verification
-gate REMOVED (``verify_enabled=False``). The loop trusts ``cancel_order``'s
-``accepted`` acknowledgement as if it were the world, so it issues the refund
-immediately, BEFORE the order has actually settled to "cancelled".
+This is the SAME loop and order store as the safe run -- with the verification
+gate REMOVED (``verify_enabled=False``) AND the refund store swapped for the
+explicitly labeled, teaching-only ``UnsafeRefundStore``, which models Part 1's
+world: a backend with no enforcement boundary of its own. The loop trusts
+``cancel_order``'s ``accepted`` acknowledgement as if it were the world, so it
+issues the refund immediately, BEFORE the order has settled to "cancelled".
 
-Look at the ``issue_refund`` step in the trace: the agent believes the order is
-``cancelled``, but ``world_order_status`` is still ``pending``. That is the bug
-this lab warns about: a tool response describes the request, not the world.
+Look at the ``issue_refund`` step in the trace: the loop state treats the order
+as ``cancelled``, but ``world_order_status`` is still ``pending``. That is the
+bug this lab warns about: a tool response describes the request, not the world.
+(With the default, production-shaped ``RefundStore``, this premature attempt is
+rejected with ``order_not_cancelled`` -- see tests/test_backend_enforcement.py.)
 
 TechNova is a fictional company; all data here is made up for teaching.
 
@@ -26,16 +30,17 @@ PART6 = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PART6))
 
 from loop import Budget, DeterministicDecider, load_skill, run_agent_loop  # noqa: E402
-from tools import OrderStore, RefundStore, Tools  # noqa: E402
+from tools import OrderStore, Tools, UnsafeRefundStore  # noqa: E402
 
 ORDER_ID = "TN-100457"
 
 
 def main() -> None:
-    # Exact same store configuration as run_safe.py -- only the gate differs.
+    # Same order store as run_safe.py; the gate is off and the refund store is
+    # the teaching-only UnsafeRefundStore (no backend enforcement, like Part 1).
     tools = Tools(
         order=OrderStore(ORDER_ID, settle_after_reads=3, settles_to="cancelled"),
-        refund=RefundStore(ORDER_ID, settle_after_reads=1),
+        refund=UnsafeRefundStore(ORDER_ID, settle_after_reads=1),
     )
 
     state, trace = run_agent_loop(
@@ -60,7 +65,7 @@ def main() -> None:
 
     print("NAIVE run complete.")
     print(f"  stop_reason       : {trace.stop_reason}")
-    print(f"  cancellation      : {state.cancellation_status} (agent belief)")
+    print(f"  cancellation      : {state.cancellation_status} (loop-state belief)")
     print(f"  refund            : {state.refund_status}")
     print(f"  refund applied x  : {tools.refund.refund_effect_count}")
     if refund_step is not None:

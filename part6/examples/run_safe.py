@@ -2,7 +2,7 @@
 
 This is the full, verify-before-commit loop. The order takes a few reads to
 settle, so the agent observes the pending state, waits and re-reads until an
-INDEPENDENT read confirms the cancellation, and only THEN issues the refund --
+AUTHORITATIVE re-read confirms the cancellation, and only THEN issues the refund --
 which it also verifies before declaring success.
 
 TechNova is a fictional company; all data here is made up for teaching.

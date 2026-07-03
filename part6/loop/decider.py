@@ -3,9 +3,9 @@
 The next action is chosen at RUNTIME from the current STATE -- never from a
 step counter. Terminology note (Part 5): because DeterministicDecider is code
 choosing the action, code owns the control policy, so v1 is workflow-shaped.
-LLMDeciderStub marks the seam where that choice becomes agentic. There is
-deliberately no ``if step == 1 ... elif step == 2`` anywhere here. ``step_count``
-exists only for the budget stop, never for choosing what to do next.
+LLMDeciderStub marks the seam where that choice becomes agentic. There is deliberately no
+``if step == 1 ... elif step == 2`` anywhere here. ``step_count`` exists only
+for the budget stop, never for choosing what to do next.
 """
 
 from __future__ import annotations

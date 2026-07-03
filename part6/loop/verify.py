@@ -30,7 +30,7 @@ def verify_action_landed(
     """Re-read until ``read()[key] == expected`` or retries are exhausted.
 
     Args:
-        read: Independent read of the world. Returns a dict like
+        read: Authoritative read of the business state. Returns a dict like
             ``{"status": "pending"}``. Called once per attempt.
         expected: The value of ``read()[key]`` that counts as confirmation.
         retries: Number of *additional* attempts after the first read. With

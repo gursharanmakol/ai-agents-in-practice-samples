@@ -38,6 +38,14 @@ class Budget:
     step_timeout_ms: float = 5000.0
     spent_cost: float = 0.0
 
+    def can_spend(self, cost: float) -> bool:
+        """Preflight: True if charging ``cost`` would stay within ``max_cost``.
+
+        Checked BEFORE an action runs, so the worst case is a clean stop, not
+        a runaway that is reconciled after the money was spent.
+        """
+        return self.spent_cost + cost <= self.max_cost
+
     def charge(self, cost: float) -> None:
         self.spent_cost += cost
 

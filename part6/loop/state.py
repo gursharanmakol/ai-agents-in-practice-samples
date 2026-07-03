@@ -20,7 +20,7 @@ class CancellationStatus:
     NOT_REQUESTED = "not_requested"  # order is open; cancel not requested
     PENDING = "pending"           # cancel accepted, not yet confirmed cancelled
     BLOCKED = "blocked"           # review-hold; cannot be auto-cancelled
-    CANCELLED = "cancelled"       # confirmed cancelled by an independent re-read
+    CANCELLED = "cancelled"       # confirmed cancelled by an authoritative re-read
 
 
 class RefundStatus:
@@ -28,7 +28,7 @@ class RefundStatus:
 
     NOT_STARTED = "not_started"
     PENDING = "pending"           # refund accepted, not yet confirmed completed
-    COMPLETED = "completed"       # confirmed completed by an independent re-read
+    COMPLETED = "completed"       # confirmed completed by an authoritative re-read
 
 
 class VerificationStatus:

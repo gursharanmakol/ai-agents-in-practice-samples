@@ -5,7 +5,7 @@ Every turn appends one ``StepRecord``. Each record keeps ``tool_response`` and
 is the lesson of this lab and is consumed by later diagnostics (Part 7):
 
 - ``tool_response`` -- what the tool *said* (e.g. ``{"status": "accepted"}``).
-- ``verification_read`` -- what an *independent re-read* of the world confirmed
+- ``verification_read`` -- what an *authoritative re-read* of the world confirmed
   (e.g. ``"cancelled"``), or ``None`` when no verification was performed.
 
 Traces are written as pretty-printed JSON so they are easy to diff and read.

@@ -81,7 +81,7 @@ class OrderStore:
         return PENDING
 
     def get_order_status(self, order_id: str) -> dict:
-        """Independent read of the order's current world status (consuming).
+        """Authoritative read of the order's current world status (consuming).
 
         Each call advances the settle clock once the cancel has been accepted.
         This is the read path the verification gate relies on; it never looks at

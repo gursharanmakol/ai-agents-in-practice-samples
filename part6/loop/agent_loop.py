@@ -9,7 +9,7 @@ The verification gate is the difference between the safe and naive runs:
 
 - ``verify_enabled=True`` (safe): an ``accepted`` ack only moves status to
   ``pending``. Status is promoted to ``cancelled`` / ``completed`` ONLY by an
-  independent re-read (``wait_and_recheck`` / ``get_refund_status``).
+  authoritative re-read (``wait_and_recheck`` / ``get_refund_status``).
 - ``verify_enabled=False`` (naive): the ack is trusted as if it were the world,
   so status jumps straight to ``cancelled`` / ``completed`` and the refund can
   go out before the world is confirmed. Same loop, same tools -- gate removed.
@@ -28,6 +28,7 @@ from .state import CancellationStatus as C
 from .state import RefundStatus as R
 from .state import State, VerificationStatus
 from .trace import StepRecord, Trace
+from .validate import validate_tool_response
 from .verify import verify_action_landed
 
 # Deterministic, recorded-only latencies (NOT wall-clock; keeps traces stable).
@@ -111,27 +112,35 @@ def run_agent_loop(
         observed_state = state.snapshot()
         action = decider.decide_next_action(state, tools, skill)
 
+        # --- preflight: check the budget BEFORE the action runs. The worst
+        # case becomes a clean stop instead of a runaway reconciled afterward.
+        action_cost = ACTION_COST.get(action, 0.0)
+        if not budget.can_spend(action_cost):
+            stop_reason = "cost_budget_exhausted"
+            break
+
         tool_called: Optional[str] = None
         tool_response = None
         verification_read = None
         note: Optional[str] = None
+        backend_rejected = False
 
         if action == "get_order_status":
             # Plain observation read: learn where the order stands. Nothing to
             # verify here -- this read IS how we observe the world.
             tool_called = "get_order_status"
-            tool_response = tools.order.get_order_status(order_id)
+            tool_response = validate_tool_response("get_order_status", tools.order.get_order_status(order_id))
             state.last_tool_result = tool_response
             state.cancellation_status = _map_order_read(tool_response["status"])
 
         elif action == "cancel_order":
             tool_called = "cancel_order"
             key = f"cancel_order:{order_id}"  # deterministic per (action, order)
-            tool_response = tools.order.cancel_order(order_id, key)
+            tool_response = validate_tool_response("cancel_order", tools.order.cancel_order(order_id, key))
             state.last_tool_result = tool_response
             # VERIFICATION GATE: an "accepted" ack is not proof the world changed.
             if verify_enabled:
-                state.cancellation_status = C.PENDING  # await an independent re-read
+                state.cancellation_status = C.PENDING  # await an authoritative re-read
             else:
                 # NAIVE: trust the request as if it were the world (the bug).
                 state.cancellation_status = C.CANCELLED
@@ -143,6 +152,7 @@ def run_agent_loop(
             raw, vstatus, outcome = actions.wait_and_recheck(
                 order_id, tools.order, retries=retries, backoff=backoff, sleep_fn=sleep_fn
             )
+            raw = validate_tool_response("get_order_status", raw)
             tool_response = raw
             verification_read = vstatus
             state.verification_status = (
@@ -154,10 +164,16 @@ def run_agent_loop(
         elif action == "issue_refund":
             tool_called = "issue_refund"
             key = f"issue_refund:{order_id}"
-            tool_response = tools.refund.issue_refund(order_id, key)
+            tool_response = validate_tool_response("issue_refund", tools.refund.issue_refund(order_id, key))
             state.last_tool_result = tool_response
+            if tool_response["status"] == "rejected":
+                # BACKEND ENFORCEMENT: the store revalidated the precondition
+                # against authoritative order state and refused to move money.
+                # The loop records it and stops; it must not paper over it.
+                note = f"refund rejected by backend: {tool_response.get('reason')}"
+                backend_rejected = True
             # Same gate as cancellation: don't trust the ack as completion.
-            if verify_enabled:
+            elif verify_enabled:
                 state.refund_status = R.PENDING
             else:
                 state.refund_status = R.COMPLETED
@@ -171,6 +187,7 @@ def run_agent_loop(
                 backoff=backoff,
                 sleep_fn=sleep_fn,
             )
+            raw = validate_tool_response("get_refund_status", raw)
             tool_response = raw
             verification_read = raw["status"]
             state.verification_status = (
@@ -193,7 +210,7 @@ def run_agent_loop(
             raise ValueError(f"Unknown action from decider: {action!r}")
 
         # --- check + update: charge budget, advance counters, record the turn ---
-        cost = ACTION_COST.get(action, 0.0)
+        cost = action_cost
         budget.charge(cost)
         state.budget_remaining = max(budget.max_cost - budget.spent_cost, 0.0)
         latency = ACTION_LATENCY_MS.get(action, 0.0)
@@ -222,6 +239,10 @@ def run_agent_loop(
         )
 
         # --- stop conditions ---
+        if backend_rejected:
+            stop_reason = "refund_rejected_by_backend"
+            break
+
         if action in TERMINAL_ACTIONS:
             stop_reason = (
                 "escalated_to_human" if action == "escalate_to_human" else "completed_successfully"

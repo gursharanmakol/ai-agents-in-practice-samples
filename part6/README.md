@@ -39,10 +39,10 @@ One definition note, to stay consistent with Part 5: v1 is not an agent. The
 next action is chosen at runtime, but it is chosen by code, and code owning the
 control policy is what makes a system workflow-shaped. That is deliberate. A
 hardcoded `cancel → verify → refund` sequence would hide the structure this lab
-exists to show; a state-driven controller keeps the loop's real shape (observe
-state, choose, act, verify, repeat) while staying deterministic. Swap a model
-in behind the same seam and the choice becomes agentic; nothing else about the
-loop changes.
+exists to show; a state-driven controller keeps the real shape of the
+`observe → decide → act → check → repeat` loop, with verification implemented
+inside `check`, while staying deterministic. Swap a model in behind the same
+seam and the choice becomes agentic; nothing else about the loop changes.
 
 So the lab is not demonstrating model intelligence. It is demonstrating the control structure
 a production agent needs around the model — the part that is hard to get right and easy to
@@ -98,13 +98,35 @@ when they agree. That gap is the whole lesson:
 Compare the two runs:
 
 - **`safe_trace.json`** — after `cancel_order` is accepted, the cancellation status is held at
-  `pending` until an independent re-read confirms `cancelled`. Only then is the refund issued,
+  `pending` until an authoritative re-read confirms `cancelled`. Only then is the refund issued,
   and the refund is itself verified before the loop finishes.
-- **`naive_trace.json`** — the verification gate is removed, so the loop trusts the `accepted`
-  acknowledgement and issues the refund immediately. Look at the `issue_refund` step: the
+- **`naive_trace.json`** — the verification gate is removed, and the example wires the
+  explicitly labeled, teaching-only `UnsafeRefundStore`, which models Part 1's world: a backend
+  with no enforcement boundary of its own. The loop trusts the `accepted` acknowledgement and
+  issues the refund immediately. Look at the `issue_refund` step: the
   loop state treats the order as `cancelled`, but `world_order_status` in `resulting_state` is
   still `pending`. The refund went out before the world was confirmed — the exact bug this
   lab warns about.
+
+## The backend is the final enforcement boundary
+
+The loop's verification gate prevents bad sequencing. The refund store enforces the actual
+rule. The default `RefundStore` is wired (by the `Tools` container) to an authoritative order
+reader and revalidates the cancellation precondition at execution time: if the order is not
+`cancelled`, the refund is **rejected** with `order_not_cancelled`, no money moves, and the
+idempotency key is not consumed, so a retry is allowed once the world settles. Run the naive
+loop against the default store and the backend stops it — `refund_rejected_by_backend` — even
+with the verification gate switched off. See `tests/test_backend_enforcement.py`.
+
+Three more production behaviors are implemented, not planned:
+
+- **Budget preflight**: the ceiling is checked *before* an action runs (`Budget.can_spend`);
+  an unaffordable action is never executed. See `tests/test_budget_preflight.py`.
+- **Six-question tool contracts**: every contract carries `description` and `when_to_use`
+  alongside shapes, failure modes, idempotency, and verification method (`tools/contracts.py`).
+- **Runtime response validation**: tool responses are checked against their contract before
+  they enter working state; malformed or unrecognized responses are rejected
+  (`loop/validate.py`, `tests/test_validation.py`).
 
 ## What this is NOT
 
@@ -122,16 +144,6 @@ This is v1 — the deterministic, workflow-shaped production scaffold. A later v
 behind the same seam (`decide_next_action`), and the surrounding structure — state, tools,
 contracts, verification, idempotency, budgets, stop rules, and trace — stays the same. That
 stability is the point: the model is the part that changes, the production structure is not.
-
-Planned for v1.1, to match the article's prescriptions exactly:
-- backend-side revalidation of the cancellation precondition inside the refund
-  store (the article's final enforcement boundary), with the naive example
-  moved to an explicitly labeled unsafe store
-- budget preflight: check the ceiling before an action runs instead of charging
-  afterward
-- `when_to_use` and `description` fields on every tool contract
-- lightweight runtime validation of tool responses before they enter working
-  state
 
 ## Read the article
 

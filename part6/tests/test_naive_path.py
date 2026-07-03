@@ -8,7 +8,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from loop import Budget, DeterministicDecider, load_skill, run_agent_loop
-from tools import OrderStore, RefundStore, Tools
+from tools import OrderStore, Tools, UnsafeRefundStore
 
 ORDER_ID = "TN-NAIVE-1"
 
@@ -18,10 +18,12 @@ def _no_sleep(_seconds: float) -> None:
 
 
 def _run():
-    # Same store config as the safe test; only the gate is removed.
+    # Same store config as the safe test; the gate is removed AND the refund
+    # store is the explicitly labeled UnsafeRefundStore, modeling Part 1's
+    # unenforced backend so the money can actually move (the bug on display).
     tools = Tools(
         order=OrderStore(ORDER_ID, settle_after_reads=3, settles_to="cancelled"),
-        refund=RefundStore(ORDER_ID, settle_after_reads=1),
+        refund=UnsafeRefundStore(ORDER_ID, settle_after_reads=1),
     )
     state, trace = run_agent_loop(
         tools,
@@ -44,7 +46,7 @@ def test_refund_issued_before_any_verification():
     actions = [r.decided_action for r in trace.records]
     assert "issue_refund" in actions, "naive run should still issue a refund"
 
-    # No step ever confirmed the cancellation by an independent re-read.
+    # No step ever confirmed the cancellation by an authoritative re-read.
     assert all(r.verification_read != "cancelled" for r in trace.records)
 
     # At the moment of the refund, the TRUE world order status was still pending:

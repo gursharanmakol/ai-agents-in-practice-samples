@@ -2,7 +2,7 @@
 
 These are the moves that are not a single tool call:
 
-- ``wait_and_recheck``: back off, then independently re-read the order status to
+- ``wait_and_recheck``: back off, then re-read the authoritative order status to
   confirm a pending cancellation (the cancellation verification gate).
 - ``escalate_to_human``: terminal hand-off; records a reason and issues NO refund.
 - ``final_response``: terminal success.
@@ -25,9 +25,9 @@ def wait_and_recheck(
     backoff: float,
     sleep_fn: Callable[[float], None],
 ) -> Tuple[dict, str, str]:
-    """Wait (with backoff) then independently re-read the order status.
+    """Wait (with backoff) then re-read the authoritative order status.
 
-    The re-read goes through ``get_order_status`` -- a path independent of
+    The re-read goes through ``get_order_status`` -- a read path separate from
     ``cancel_order``'s acknowledgement -- which is what makes it a real
     verification rather than wishful thinking.
 

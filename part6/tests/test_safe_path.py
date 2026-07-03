@@ -43,7 +43,7 @@ def test_refund_issued_only_after_cancellation_verified():
     actions = [r.decided_action for r in trace.records]
     refund_index = actions.index("issue_refund")
 
-    # An independent re-read must have CONFIRMED "cancelled" before the refund.
+    # An authoritative re-read must have CONFIRMED "cancelled" before the refund.
     verified_before_refund = any(
         r.verification_read == "cancelled" for r in trace.records[:refund_index]
     )
