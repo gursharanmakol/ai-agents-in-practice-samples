@@ -28,8 +28,8 @@ class ConcurrentReopenOrderStore(OrderStore):
     refund write. Counting starts only after a consuming read has observed
     ``cancelled``, so the cancel-step diagnostic peek is ignored. The first
     cancelled peek after that (end of ``wait_and_recheck``) still reports
-    ``cancelled``; subsequent peeks — including the refund store's authoritative
-    reader — report ``reopen_as``.
+    ``cancelled``; subsequent peeks (including the refund store's authoritative
+    reader) report ``reopen_as``.
     """
 
     def __init__(self, order_id: str, *, reopen_as: str = "open", **kwargs) -> None:
@@ -48,6 +48,8 @@ class ConcurrentReopenOrderStore(OrderStore):
         base = super().peek_order_status(order_id)
         if self._seen_cancelled_read and base["status"] == "cancelled":
             self._cancelled_peeks += 1
+            # Timing depends on agent_loop doing exactly one diagnostic peek per
+            # step. An extra peek elsewhere would shift this flip silently.
             if self._cancelled_peeks > 1:
                 return {"order_id": order_id, "status": self.reopen_as}
         return base

@@ -1,4 +1,4 @@
-# Part 6 — Building the Production Agent Loop
+# Part 6: Building the Production Agent Loop
 
 A deterministic, runnable production-loop lab for TechNova's "cancel an order, then refund what's
 owed" flow. It demonstrates one core principle: **a tool response describes the REQUEST, not
@@ -21,15 +21,17 @@ gate, or trace.
 
 You might be wondering: where is the actual LLM deciding what to do?
 
-There isn't one in v1, by design — and that is the point of this lab.
+There isn't one in v1, by design, and that is the point of this lab.
 
 Part 6 is about the production structure *around* an agent loop, not about model
 intelligence: working state, scoped tools, tool contracts, idempotency keys,
 verify-before-commit, budget and stop rules, and a trace. Those are the parts that decide
 whether an agent survives production, and they are identical whether the next action is
-chosen by a deterministic function or by a model.
+chosen by a deterministic function or by a model. Same-key retry without double-apply is
+covered by `test_repeated_cancel_with_same_key_does_not_double_apply` and
+`test_repeated_refund_with_same_key_does_not_double_pay` in `tests/test_idempotency.py`.
 
-A real LLM decider would replace exactly one thing — the `decide_next_action()` function in
+A real LLM decider would replace exactly one thing: the `decide_next_action()` function in
 `loop/decider.py`, where `LLMDeciderStub` marks the seam. State, tools, contracts, the
 verification gate, idempotency, budgets, stop rules, and the trace would not change. That is
 why the default decider is deterministic: it runs with no API key, produces stable and
@@ -45,23 +47,33 @@ inside `check`, while staying deterministic. Swap a model in behind the same
 seam and the choice becomes agentic; nothing else about the loop changes.
 
 So the lab is not demonstrating model intelligence. It is demonstrating the control structure
-a production agent needs around the model — the part that is hard to get right and easy to
+a production agent needs around the model: the part that is hard to get right and easy to
 skip in a demo.
 
 ## Note on the skill file
 
 The skill in `skills/cancel_order_skill.md` is the packaged procedure for the task, loaded as
 text. In this deterministic v1 lab, the decider encodes the same logic in code (branching on
-state) rather than parsing the markdown at runtime — so the file travels with the lab as the
+state) rather than parsing the markdown at runtime, so the file travels with the lab as the
 human-readable procedure, but it does not drive control flow. A live LLM decider could read
-this same skill text when choosing the next action, and the rest of the loop — state, tools,
-contracts, verification, idempotency, budget, stop rules, trace — would stay the same.
+this same skill text when choosing the next action, and the rest of the loop (state, tools,
+contracts, verification, idempotency, budget, stop rules, trace) would stay the same.
+
+The same applies to approval. Working state carries an `approval_status` field, and step 2 of
+the skill describes a human approval threshold, but the v1 decider never consults either one:
+there is no gate, no threshold, and no transition. You will see `approval_status` in every
+trace record because it is part of the working-state example, not because a gate ran.
+Approval travels with the lab as part of the production design; it is not exercised here.
 
 ## Requirements
 
 - Python 3.10+
 
+
+
 ## Run it
+
+
 
 ### macOS / Linux
 
@@ -72,6 +84,8 @@ python examples/run_safe.py
 python examples/run_naive.py
 pytest
 ```
+
+
 
 ### Windows (PowerShell)
 
@@ -93,20 +107,22 @@ when they agree. That gap is the whole lesson:
 
 - `tool_response` is what the tool *said* (e.g. `cancel_order` -> `{"status": "accepted"}`).
 - `verification_read` is what an **authoritative re-read** of the business state *confirmed*
-  (e.g. `get_order_status` -> `"cancelled"`, or still `"pending"`).
+(e.g. `get_order_status` -> `"cancelled"`, or still `"pending"`).
 
 Compare the two runs:
 
-- **`safe_trace.json`** — after `cancel_order` is accepted, the cancellation status is held at
-  `pending` until an authoritative re-read confirms `cancelled`. Only then is the refund issued,
-  and the refund is itself verified before the loop finishes.
-- **`naive_trace.json`** — the verification gate is removed, and the example wires the
-  explicitly labeled, teaching-only `UnsafeRefundStore`, which models Part 1's world: a backend
-  with no enforcement boundary of its own. The loop trusts the `accepted` acknowledgement and
-  issues the refund immediately. Look at the `issue_refund` step: the
-  loop state treats the order as `cancelled`, but `world_order_status` in `resulting_state` is
-  still `pending`. The refund went out before the world was confirmed — the exact bug this
-  lab warns about.
+- `safe_trace.json`: after `cancel_order` is accepted, the cancellation status is held at
+`pending` until an authoritative re-read confirms `cancelled`. Only then is the refund issued,
+and the refund is itself verified before the loop finishes.
+- `naive_trace.json`: the verification gate is removed, and the example wires the
+explicitly labeled, teaching-only `UnsafeRefundStore`, which models Part 1's world: a backend
+with no enforcement boundary of its own. The loop trusts the `accepted` acknowledgement and
+issues the refund immediately. Look at the `issue_refund` step: the
+loop state treats the order as `cancelled`, but `world_order_status` in `resulting_state` is
+still `pending`. The refund went out before the world was confirmed: the exact bug this
+lab warns about.
+
+
 
 ## The backend is the final enforcement boundary
 
@@ -114,39 +130,50 @@ The loop's verification gate prevents bad sequencing. The refund store enforces 
 rule. The default `RefundStore` is wired (by the `Tools` container) to an authoritative order
 reader and revalidates the cancellation precondition at execution time: if the order is not
 `cancelled`, the refund is **rejected** with `order_not_cancelled`, no money moves, and the
-idempotency key is not consumed, so a retry is allowed once the world settles. An unwired
+idempotency key is not consumed, so a retry is allowed once the world settles. See
+`test_rejection_does_not_consume_the_idempotency_key`. An unwired
 production store fails closed: without an authoritative reader it rejects every refund with
 `authoritative_order_reader_unavailable`. Run the naive
-loop against the default store and the backend stops it — `refund_rejected_by_backend` — even
+loop against the default store and the backend stops it (`refund_rejected_by_backend`) even
 with the verification gate switched off. See `tests/test_backend_enforcement.py`.
+
+Verification is necessary for sequencing, but it is not a transaction. The world can change
+between the re-read that confirms the cancellation and the write that follows it.
+`test_verified_then_concurrent_reopen_rejects_refund` runs the full loop with the gate on: the
+cancellation is verified, another actor reopens the order, the refund is attempted on that
+now-stale observation, and the store revalidates at execution time and refuses. No money moves.
+The concurrent reopen is simulated by a deterministic test-local store subclass, not real
+concurrency.
 
 Three more production behaviors are implemented, not planned:
 
 - **Budget preflight**: the ceiling is checked *before* an action runs (`Budget.can_spend`);
-  an unaffordable action is never executed. See `tests/test_budget_preflight.py`.
+an unaffordable action is never executed. See `tests/test_budget_preflight.py`.
 - **Six-question tool contracts**: every contract carries `description` and `when_to_use`
-  alongside shapes, failure modes, idempotency, and verification method (`tools/contracts.py`).
+alongside shapes, failure modes, idempotency, and verification method (`tools/contracts.py`).
 - **Runtime response validation**: tool responses are checked against their contract before
-  they enter working state; malformed or unrecognized responses are rejected
-  (`loop/validate.py`, `tests/test_validation.py`).
+they enter working state; malformed or unrecognized responses are rejected
+(`loop/validate.py`, `tests/test_validation.py`).
+
+
 
 ## What this is NOT
 
 This is **not** a framework or a platform. There is no MCP, no RAG, no real LLM, no real
 payments, and no multi-agent orchestration. It is one bounded production-loop scaffold with
 a deterministic controller and two fake, in-memory tools. MCP and a real LLM decider are possible later additions *around the same
-tools and loop* — the loop, state, contracts, verification gate, and trace would not change.
+tools and loop*: the loop, state, contracts, verification gate, and trace would not change.
 
 TechNova is a fictional company. All orders, refunds, and policies here are made up for
 teaching.
 
 ## Roadmap
 
-This is v1 — the deterministic, workflow-shaped production scaffold. A later version swaps in a real LLM decider
-behind the same seam (`decide_next_action`), and the surrounding structure — state, tools,
-contracts, verification, idempotency, budgets, stop rules, and trace — stays the same. That
+This is v1: the deterministic, workflow-shaped production scaffold. A later version swaps in a real LLM decider
+behind the same seam (`decide_next_action`), and the surrounding structure (state, tools,
+contracts, verification, idempotency, budgets, stop rules, and trace) stays the same. That
 stability is the point: the model is the part that changes, the production structure is not.
 
 ## Read the article
 
-[AI Agents in Practice — Part 6: Building the Production Agent Loop](https://dev.to/gursharansingh/ai-agents-in-practice-part-6-building-the-production-agent-loop-2lfi)
+[AI Agents in Practice, Part 6: Building the Production Agent Loop](https://dev.to/gursharansingh/ai-agents-in-practice-part-6-building-the-production-agent-loop-2lfi)
