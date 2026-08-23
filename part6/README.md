@@ -174,6 +174,10 @@ behind the same seam (`decide_next_action`), and the surrounding structure (stat
 contracts, verification, idempotency, budgets, stop rules, and trace) stays the same. That
 stability is the point: the model is the part that changes, the production structure is not.
 
-## Read the article
+## Companion Article
 
-[AI Agents in Practice, Part 6: Building the Production Agent Loop](https://dev.to/gursharansingh/ai-agents-in-practice-part-6-building-the-production-agent-loop-2lfi)
+This lab accompanies
+[Part 6: Building the Production Agent Loop](https://aiinpracticehub.com/articles/building-the-production-agent-loop/)
+in the
+[AI Agents in Practice series](https://aiinpracticehub.com/series/ai-agents/)
+on [AI in Practice Hub](https://aiinpracticehub.com/).
