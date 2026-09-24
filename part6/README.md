@@ -52,14 +52,14 @@ skip in a demo.
 
 ## Note on the skill file
 
-The skill in `skills/cancel_order_skill.md` is the packaged procedure for the task, loaded as
+The skill in `skills/cancel-and-refund/SKILL.md` is the packaged procedure for the task, loaded as
 text. In this deterministic v1 lab, the decider encodes the same logic in code (branching on
 state) rather than parsing the markdown at runtime, so the file travels with the lab as the
 human-readable procedure, but it does not drive control flow. A live LLM decider could read
 this same skill text when choosing the next action, and the rest of the loop (state, tools,
 contracts, verification, idempotency, budget, stop rules, trace) would stay the same.
 
-The same applies to approval. Working state carries an `approval_status` field, and step 2 of
+The same applies to approval. Working state carries an `approval_status` field, and step 4 of
 the skill describes a human approval threshold, but the v1 decider never consults either one:
 there is no gate, no threshold, and no transition. You will see `approval_status` in every
 trace record because it is part of the working-state example, not because a gate ran.

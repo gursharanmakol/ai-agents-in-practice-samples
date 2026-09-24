@@ -52,14 +52,14 @@ PRINCIPLE = (
 )
 
 
-def load_skill(name: str = "cancel_order_skill") -> str:
-    """Load a skill file as TEXT.
+def load_skill(name: str = "cancel-and-refund") -> str:
+    """Load a skill's SKILL.md as TEXT.
 
     The decider does NOT parse this for control flow; the skill is the
     human-readable procedure that travels with the code. The path is built
     relative to this file so it works no matter where python/pytest is run from.
     """
-    path = Path(__file__).resolve().parent.parent / "skills" / f"{name}.md"
+    path = Path(__file__).resolve().parent.parent / "skills" / name / "SKILL.md"
     return path.read_text(encoding="utf-8")
 
 
